@@ -1,8 +1,8 @@
 name: Deploy openGym site
 
-# The site is committed as one site.zip (6,643 files, ~38 MB) because the GitHub contents API and
-# the web uploader are both impractical for that many files. Actions unpacks it and publishes the
-# result to Pages 鈥?the repository stays small to read, the artifact carries the site.
+# The site is committed as one site.zip (~40 MB, 6,643 files): the contents API and the web
+# uploader are both impractical for that many files. Actions unpacks it and publishes the result
+# to Pages, so the repository stays readable and the artifact carries the site.
 on:
   push:
     branches: [main]
@@ -26,26 +26,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Turns Pages on if it is not already: the repository's own workflow token may do this,
-      # which saves the owner from a settings trip (and the deploy token from needing pages=write).
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
+      # Python's zipfile rather than unzip: unzip returns 1 for "success with warning" on archives
+      # written by Windows tools, and this shell runs with -e, so a warning used to fail the job.
       - name: Unpack the site
         run: |
-          set -e
+          rm -rf _site
           mkdir -p _site
-          if [ -f site.zip ]; then
-            unzip -q site.zip -d _site
-          fi
-          # Tolerate a zip that wrapped everything in one folder.
-          if [ ! -f _site/index.html ]; then
-            inner=$(find _site -maxdepth 2 -name index.html -printf '%h\n' | head -n 1)
-            if [ -n "$inner" ]; then mv "$inner"/* _site/ && rm -rf "$inner"; fi
-          fi
+          python3 -m zipfile -e site.zip _site
           test -f _site/index.html
+          echo "files: $(find _site -type f | wc -l)"
           du -sh _site
+
+      - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:
