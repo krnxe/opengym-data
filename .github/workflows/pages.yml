@@ -1,0 +1,55 @@
+name: Deploy openGym site
+
+# The site is committed as one site.zip (6,643 files, ~38 MB) because the GitHub contents API and
+# the web uploader are both impractical for that many files. Actions unpacks it and publishes the
+# result to Pages 鈥?the repository stays small to read, the artifact carries the site.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Turns Pages on if it is not already: the repository's own workflow token may do this,
+      # which saves the owner from a settings trip (and the deploy token from needing pages=write).
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Unpack the site
+        run: |
+          set -e
+          mkdir -p _site
+          if [ -f site.zip ]; then
+            unzip -q site.zip -d _site
+          fi
+          # Tolerate a zip that wrapped everything in one folder.
+          if [ ! -f _site/index.html ]; then
+            inner=$(find _site -maxdepth 2 -name index.html -printf '%h\n' | head -n 1)
+            if [ -n "$inner" ]; then mv "$inner"/* _site/ && rm -rf "$inner"; fi
+          fi
+          test -f _site/index.html
+          du -sh _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
